@@ -1,0 +1,54 @@
+{
+  "name": "alanpetersen-p4utils",
+  "version": "0.1.0",
+  "author": "alanpetersen",
+  "summary": "Various custom types for interacting with a Perforce server instance",
+  "license": "Apache-2.0",
+  "source": "https://github.com/alanpetersen/p4utils.git",
+  "project_page": "https://github.com/alanpetersen/p4utils",
+  "issues_url": "https://github.com/alanpetersen/p4utils/issues",
+  "dependencies": [
+    {"name":"puppetlabs/stdlib","version_requirement":">= 3.2.0 < 5.0.0"},
+    {"name":"alanpetersen/p4ruby","version_requirement":">= 0.1.0 < 2.0.0"}
+  ],
+  "requirements": [
+    {
+      "name": "pe",
+      "version_requirement": ">= 3.0.0 < 2017.x"
+    },
+    {
+      "name": "puppet",
+      "version_requirement": ">= 3.0.0 < 5.0.0"
+    }
+  ],
+  "operatingsystem_support": [
+    {
+      "operatingsystem": "Debian",
+      "operatingsystemrelease": [
+        "6",
+        "7"
+      ]
+    },
+    {
+      "operatingsystem": "Ubuntu",
+      "operatingsystemrelease": [
+        "12.04",
+        "14.04"
+      ]
+    },
+    {
+      "operatingsystem": "RedHat",
+      "operatingsystemrelease": [
+        "6",
+        "7"
+      ]
+    },
+    {
+      "operatingsystem": "CentOS",
+      "operatingsystemrelease": [
+        "6",
+        "7"
+      ]
+    }
+  ]
+}
