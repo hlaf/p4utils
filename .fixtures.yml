@@ -1,0 +1,6 @@
+fixtures:
+  repositories:
+    stdlib:  "https://github.com/puppetlabs/puppetlabs-stdlib.git"
+    p4ruby: "https://github.com/alanpetersen/puppet-p4ruby.git"
+  symlinks:
+    p4utils: "#{source_dir}"

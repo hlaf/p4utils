@@ -80,18 +80,9 @@ define p4utils::config (
     mode   => $filemode,
   }
 
-  # manage the config file using the inline template
-  $p4config_template = @(END)
-P4PORT=<%= @p4port %>
-P4USER=<%= @p4user %>
-P4CLIENT=<%= @p4client %>
-P4TICKETS=<%= @p4tickets_real %>
-<%- if @p4port.start_with?('ssl') then -%>
-P4TRUST=<%= @p4trust_real %>
-<%- end -%>
-END
+  # lay down the configuration file using the template
   file { $configfile:
-    content => inline_template($p4config_template),
+    content => inline_template('p4utils/p4config.erb'),
   }
 
   # ensure that the p4trust is present, if the port uses SSL

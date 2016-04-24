@@ -1,6 +1,6 @@
 {
   "name": "alanpetersen-p4utils",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "alanpetersen",
   "summary": "Various custom types for interacting with a Perforce server instance",
   "license": "Apache-2.0",

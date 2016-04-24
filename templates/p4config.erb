@@ -1,0 +1,7 @@
+P4PORT=<%= @p4port %>
+P4USER=<%= @p4user %>
+P4CLIENT=<%= @p4client %>
+P4TICKETS=<%= @p4tickets_real %>
+<%- if @p4port.start_with?('ssl') then -%>
+P4TRUST=<%= @p4trust_real %>
+<%- end -%>
