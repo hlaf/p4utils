@@ -17,7 +17,7 @@ Puppet::Type.type(:p4_user).provide(:p4ruby) do
         :fullname   => u['FullName'],
         :email      => u['Email'],
         :type       => u['Type'],
-        :authmethod => u['AuthMethod'],
+        :authmethod => u['AuthMethod']
       )
     end
     return users
@@ -48,7 +48,7 @@ Puppet::Type.type(:p4_user).provide(:p4ruby) do
     if(resource[:authmethod]) then
       authmethod = resource[:authmethod]
     end
-    helper.addUser(userid, fullname, email, type:type, auth:authmethod)
+    helper.addUser(userid, fullname, email, :type => type, :auth => authmethod)
     if(resource[:password]) then
       helper.setPassword(userid, resource[:password])
     end
@@ -116,7 +116,7 @@ Puppet::Type.type(:p4_user).provide(:p4ruby) do
       if(resource[:authmethod]) then
         authmethod = resource[:authmethod]
       end
-      helper.addUser(userid, fullname, email, type:type, auth:authmethod)
+      helper.addUser(userid, fullname, email, :type => type, :auth => authmethod)
     end
     @property_hash = resource.to_hash
     if(resource[:password]) then
