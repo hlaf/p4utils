@@ -196,7 +196,7 @@ module P4Utils
       return users.find {|u| u["User"] == userid }
     end
 
-    def addUser(userid, fullName, email, type:'standard', auth:getSettingValue('auth.default.method'))
+    def addUser(userid, fullName, email, type = 'standard', auth = getSettingValue('auth.default.method'))
       raise "invalid type" if not U_TYPES.include?("#{type}")
       raise "invalid auth" if not U_AUTH.include?("#{auth}")
       nu = { 'User' => userid, 'FullName' => fullName, 'Email' => email, 'Type' => type, 'AuthMethod' => auth}
@@ -210,7 +210,7 @@ module P4Utils
       @p4.run_passwd('-P', password, userid)
     end
 
-    def removeUser(userid, cleanProtections:true, cleanGroups:true)
+    def removeUser(userid, cleanProtections = true, cleanGroups = true)
       if getUser(userid) then
         @p4.delete_user('-f', userid)
         if cleanProtections then
@@ -255,14 +255,14 @@ module P4Utils
     end
 
     def addGroup(groupid,
-      maxResults:'unset',
-      maxScanRows:'unset',
-      maxLockTime:'unset',
-      timeout:43200,
-      passTimeout:'unset',
-      owners:[],
-      users:[],
-      subgroups:[])
+      maxResults = 'unset',
+      maxScanRows = 'unset',
+      maxLockTime = 'unset',
+      timeout = 43200,
+      passTimeout = 'unset',
+      owners = [],
+      users = [],
+      subgroups = [])
       groupList = getGroups.keys
       group = {}
       group['Group'] = groupid
