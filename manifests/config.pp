@@ -57,6 +57,7 @@ define p4utils::config (
   $fileowner  = 'root',
   $filegroup  = 'root',
   $filemode   = '0600',
+  $ruby_path  = '/opt/puppetlabs/puppet/bin/ruby',
 ) {
 
   $configparent = getparent($configfile)
@@ -102,9 +103,9 @@ define p4utils::config (
       }
     }
     exec { 'p4trust':
-      command     => "/opt/puppetlabs/puppet/bin/ruby ${trust_script}",
+      command     => "${ruby_path} ${trust_script}",
       environment => "P4CONFIG=${configfile}",
-      unless      => "/opt/puppetlabs/puppet/bin/ruby ${checktrust_script}",
+      unless      => "${ruby_path} ${checktrust_script}",
       require     => File[$trust_script, $checktrust_script, $configfile],
     }
   }
@@ -123,9 +124,9 @@ define p4utils::config (
       }
     }
     exec { 'p4login':
-      command     => "/opt/puppetlabs/puppet/bin/ruby ${login_script} ${p4password}",
+      command     => "${ruby_path} ${login_script} ${p4password}",
       environment => "P4CONFIG=${configfile}",
-      unless      => "/opt/puppetlabs/puppet/bin/ruby ${checklogin_script}",
+      unless      => "${ruby_path} ${checklogin_script}",
       require     => File[$login_script, $checklogin_script, $configfile],
     }
   }
