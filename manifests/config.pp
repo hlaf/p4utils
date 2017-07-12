@@ -83,7 +83,7 @@ define p4utils::config (
 
   # lay down the configuration file using the template
   file { $configfile:
-    content => inline_template('p4utils/p4config.erb'),
+    content => template('p4utils/p4config.erb'),
   }
 
   # ensure that the p4trust is present, if the port uses SSL
