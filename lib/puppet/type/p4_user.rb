@@ -65,4 +65,11 @@ Puppet::Type.newtype(:p4_user) do
     newvalues(:perforce, :ldap)
   end
 
+  newparam(:p4ruby_lib_path) do
+    desc "Path to the p4ruby gem's (binary) lib directory."
+    validate do |value|
+      ENV['RUBYLIB'] = value
+    end
+  end
+
 end
