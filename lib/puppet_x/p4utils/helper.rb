@@ -1,5 +1,3 @@
-require 'P4'
-
 module P4Utils
 
   class Helper
@@ -21,6 +19,7 @@ module P4Utils
     # end
 
     def initialize(p4config=nil)
+      require 'P4'
       if p4config != nil then
         ENV['P4CONFIG'] = p4config
       end
