@@ -36,7 +36,7 @@ Puppet::Type.type(:p4_user).provide(:p4ruby) do
     Puppet.debug("creating new p4_user resource")
     self.fail "email is a required attribute" unless resource[:email]
     self.fail "fullname is a required attribute" unless resource[:fullname]
-    helper = P4Utils::Helper.new
+    helper = P4Utils::Helper.new(resource[:p4config])
     userid = resource[:name]
     fullname = resource[:fullname]
     email = resource[:email]
