@@ -15,7 +15,7 @@ Puppet::Type.type(:p4_protection).provide(:p4ruby) do
       protections << new(
         :ensure   => :present,
         :name     => line,
-        :position => i,
+        :position => i
       )
     end
     return protections
