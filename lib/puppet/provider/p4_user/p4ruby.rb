@@ -24,6 +24,9 @@ Puppet::Type.type(:p4_user).provide(:p4ruby) do
   end
 
   def self.prefetch(resources)
+    catalog = resources[resources.keys.first].catalog
+    p4_user_config = catalog.resources.find{|s| s.type == :p4_user}
+    ENV['P4CONFIG'] = p4_user_config['p4config']
     users = instances
     resources.keys.each do | name |
       if provider = users.find{ | user | user.name == name }
