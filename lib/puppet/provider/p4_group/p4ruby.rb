@@ -32,7 +32,7 @@ Puppet::Type.type(:p4_group).provide(:p4ruby) do
         :passtimeout => convert_value_to_label(data['passTimeout']),
         :owners      => data['owners'],
         :users       => data['users'],
-        :subgroups   => data['subgroups'],
+        :subgroups   => data['subgroups']
       )
     end
     return groups
@@ -85,14 +85,14 @@ Puppet::Type.type(:p4_group).provide(:p4ruby) do
     end
 
     P4Utils::Helper.new.addGroup(group,
-      maxResults: maxresults,
-      maxScanRows: maxscanrows,
-      maxLockTime: maxlocktime,
-      timeout: timeout,
-      passTimeout: passtimeout,
-      owners: owners,
-      users: users,
-      subgroups: subgroups)
+      maxresults,
+      maxscanrows,
+      maxlocktime,
+      timeout,
+      passtimeout,
+      owners,
+      users,
+      subgroups)
 
   end
 
@@ -207,14 +207,14 @@ Puppet::Type.type(:p4_group).provide(:p4ruby) do
       end
 
       P4Utils::Helper.new.addGroup(group,
-        maxResults: maxresults,
-        maxScanRows: maxscanrows,
-        maxLockTime: maxlocktime,
-        timeout: timeout,
-        passTimeout: passtimeout,
-        owners: owners,
-        users: users,
-        subgroups: subgroups)
+        maxresults,
+        maxscanrows,
+        maxlocktime,
+        timeout,
+        passtimeout,
+        owners,
+        users,
+        subgroups)
     end
     @property_hash = resource.to_hash
   end
