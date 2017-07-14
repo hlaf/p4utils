@@ -87,7 +87,7 @@ Puppet::Type.type(:p4_group).provide(:p4ruby) do
       passtimeout = resource[:passtimeout]
     end
 
-    P4Utils::Helper.new.addGroup(group,
+    P4Utils::Helper.new(resource[:p4config]).addGroup(group,
       maxresults,
       maxscanrows,
       maxlocktime,
