@@ -39,6 +39,9 @@ Puppet::Type.type(:p4_group).provide(:p4ruby) do
   end
 
   def self.prefetch(resources)
+    catalog = resources[resources.keys.first].catalog
+    p4_group_config = catalog.resources.find{|s| s.type == :p4_group}
+    ENV['P4CONFIG'] = p4_group_config['p4config']
     groups = instances
     resources.keys.each do | name |
       if provider = groups.find{ | g | g.name == name }
