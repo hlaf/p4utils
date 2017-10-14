@@ -23,6 +23,9 @@ Puppet::Type.type(:p4_trigger).provide(:p4ruby) do
   end
 
   def self.prefetch(resources)
+    catalog = resources[resources.keys.first].catalog
+    p4_trigger_config = catalog.resources.find{|s| s.type == :p4_trigger}
+    ENV['P4CONFIG'] = p4_trigger_config['p4config']
     triggers = instances
     resources.keys.each do | name |
       if provider = triggers.find{ | s | s.name == name }
