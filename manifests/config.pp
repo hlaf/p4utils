@@ -102,7 +102,7 @@ define p4utils::config (
         source => 'puppet:///modules/p4utils/p4checktrust.rb',
       }
     }
-    exec { 'p4trust':
+    exec { "p4trust_${title}":
       command     => "${ruby_path} ${trust_script}",
       environment => "P4CONFIG=${configfile}",
       unless      => "${ruby_path} ${checktrust_script}",
@@ -123,7 +123,7 @@ define p4utils::config (
         source => 'puppet:///modules/p4utils/p4checklogin.rb',
       }
     }
-    exec { 'p4login':
+    exec { "p4login_${title}":
       command     => "${ruby_path} ${login_script} ${p4password}",
       environment => "P4CONFIG=${configfile}",
       unless      => "${ruby_path} ${checklogin_script}",
