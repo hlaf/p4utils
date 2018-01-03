@@ -111,13 +111,14 @@ define p4utils::config (
   }
 
   if $p4password {
-    $login_script = "/tmp/${p4port}_login.rb"
+    $id = sha1($title)
+    $login_script = "/tmp/${p4port}_login_${id}.rb"
     if !defined(File[$login_script]) {
       file { $login_script:
         source => 'puppet:///modules/p4utils/p4login.rb',
       }
     }
-    $checklogin_script = "/tmp/${p4port}_checklogin.rb"
+    $checklogin_script = "/tmp/${p4port}_checklogin_${id}.rb"
     if !defined(File[$checklogin_script]) {
       file { $checklogin_script:
         source => 'puppet:///modules/p4utils/p4checklogin.rb',
