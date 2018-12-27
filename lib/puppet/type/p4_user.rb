@@ -30,11 +30,7 @@ Puppet::Type.newtype(:p4_user) do
     configfile = nil
     # validate the p4config parameter, if passed to the resource
     validate do |value|
-      if !File.exists?(value) then
-        raise ArgumentError, "file #{value} does not exist"
-      else
-        configfile = value
-      end
+      configfile = value
     end
     # if no parameter passed, check for the default configfile
     if !configfile then
