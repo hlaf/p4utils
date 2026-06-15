@@ -111,6 +111,11 @@ define p4utils::config (
   }
 
   if $p4password {
+    # Shell-quote $p4password so a value containing $, *, glob chars, quotes,
+    # backticks, etc. doesn't get expanded or corrupted by /bin/sh -c. A temp
+    # variable is required because Puppet 3.8.x rejects shellquote() inside a
+    # double-quoted-string interpolation at apply time (parses locally fine).
+    $p4password_quoted = shellquote($p4password)
     $id = sha1($title)
     $login_script = "/tmp/${p4port}_login_${id}.rb"
     if !defined(File[$login_script]) {
@@ -125,7 +130,7 @@ define p4utils::config (
       }
     }
     exec { "p4login_${title}":
-      command     => "${ruby_path} ${login_script} ${p4password}",
+      command     => "${ruby_path} ${login_script} ${p4password_quoted}",
       environment => "P4CONFIG=${configfile}",
       unless      => "${ruby_path} ${checklogin_script}",
       require     => File[$login_script, $checklogin_script, $configfile],
