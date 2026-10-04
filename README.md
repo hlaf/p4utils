@@ -95,7 +95,7 @@ manage various aspects of the Perforce server's configuration.
 * `configfile` -- the path to the configuration file. Defaults to  `$title`.
 * `p4port` -- the P4PORT. Defaults to `1666`.
 * `p4user` -- the user account with **super** privileges. This account must already exist (i.e. you cannot create it using the `p4_user` type, as the super account is needed to create the users. Chicken and egg! Defaults to `p4admin`.
-* `p4password` -- the password associated with the `p4user`. If provided, the defined resource will attempt to login with the account using this password, creating/updating the tickets file. This is technically optional, as you can manually login (using `p4 login` on the node) and simply provide the location of the p4tickets file.
+* `p4password` -- the password associated with the `p4user`. If provided, the defined resource will attempt to login with the account using this password, creating/updating the tickets file. The password is handed to the login script through its environment (`P4PASSWD`), never on the command line, so it shows up neither in `ps` nor in the Puppet log/report when the login fails. This is technically optional, as you can manually login (using `p4 login` on the node) and simply provide the location of the p4tickets file.
 * `p4client` -- the client to use to retrive/update files on the server. Currently **optional** because none of the types currently require a configured client. This could change, however, as new types are added.
 * `p4tickets` -- the location of the `P4TICKETS` file. Defaults to a p4tickets.txt file in the same directory as the configfile.
 * `p4trust` -- the location of the `P4TRUST` file. Defaults to a p4trust.txt file in the same directory as the configfile.

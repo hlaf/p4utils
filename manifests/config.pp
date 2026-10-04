@@ -111,11 +111,6 @@ define p4utils::config (
   }
 
   if $p4password {
-    # Shell-quote $p4password so a value containing $, *, glob chars, quotes,
-    # backticks, etc. doesn't get expanded or corrupted by /bin/sh -c. A temp
-    # variable is required because Puppet 3.8.x rejects shellquote() inside a
-    # double-quoted-string interpolation at apply time (parses locally fine).
-    $p4password_quoted = shellquote($p4password)
     $id = sha1($title)
     $login_script = "/tmp/${p4port}_login_${id}.rb"
     if !defined(File[$login_script]) {
@@ -129,9 +124,13 @@ define p4utils::config (
         source => 'puppet:///modules/p4utils/p4checklogin.rb',
       }
     }
+    # The password reaches the script through its environment (P4PASSWD, which
+    # the P4 API reads natively), never the command line: argv is visible to
+    # every local user via ps, and Puppet prints the failing command in full
+    # to the agent log and report. Exec never logs its environment.
     exec { "p4login_${title}":
-      command     => "${ruby_path} ${login_script} ${p4password_quoted}",
-      environment => "P4CONFIG=${configfile}",
+      command     => "${ruby_path} ${login_script}",
+      environment => ["P4CONFIG=${configfile}", "P4PASSWD=${p4password}"],
       unless      => "${ruby_path} ${checklogin_script}",
       require     => File[$login_script, $checklogin_script, $configfile],
     }
