@@ -145,6 +145,39 @@ p4_user { 'bob':
 
 For more information on Perforce users, consult the Perforce documentation (or type `p4 help user`).
 
+### `p4_ldap`
+This custom type manages Perforce LDAP configurations (`p4 ldap` specs). Only the attributes you declare are managed; every other field of an existing spec is read back and preserved on each save, so a resource that sets just `host` leaves the bind, group and attribute fields alone.
+
+#### Attributes
+* `ensure` -- must be one of `present` or `absent`. Defaults to `present`.
+* `name` -- the configuration name. Defaults to `$title`.
+* `host`, `port`, `encryption` (`none`, `ssl` or `tls`), `bind_method` (`simple`, `search` or `sasl`), `options`, `simple_pattern`, `search_base_dn`, `search_filter`, `search_scope` (`baseonly`, `children` or `subtree`), `search_bind_dn`, `sasl_realm`, `group_base_dn`, `group_search_filter`, `group_search_scope`, `attribute_uid`, `attribute_name`, `attribute_email` -- the spec fields, one property each (see `p4 help ldap`).
+* `search_passwd` -- the password the server binds with as `search_bind_dn`. When given it is **enforced**: on every run the provider has the server test the configuration (`p4 ldap -t <probe_user> <name>`, the probe user's password answered over the API's prompt channel) and, if the directory refuses the server's own bind -- a stale `SearchPasswd`, typically after the bind account's password was rotated -- re-saves the spec with the declared password and tests again, failing loudly if the directory still refuses. It is a *parameter*, so it never appears as a desired value in events, reports or `--noop` diffs; it only ever travels inside the spec form over the Perforce API, never on a command line. Requires `probe_user` and `probe_password`, and is required by a declared `search_bind_dn`.
+* `probe_user` / `probe_password` -- a directory user (any LDAP user the configuration can authenticate; it needs no Perforce access) and its password, used only for the `search_passwd` test above. A refusal that names the probe user rather than the server's bind DN fails the resource instead of being mistaken for a stale `SearchPasswd`.
+* `search_passwd_state` -- **derived, do not set**. Present (desired `accepted`) exactly when `search_passwd` is given; its current value is `accepted` or `rejected`, so a `search_passwd_state changed 'rejected' to 'accepted'` event is the provider re-saving the spec. Configurations managed without a `search_passwd` are never tested.
+* `p4config` -- used to specify the location of the config file. If not specified, the type will default to `$PUPPET_CONFIG_DIR/p4config.txt`.
+
+#### Example Usage
+
+~~~
+p4_ldap { 'corp-ldap':
+  ensure         => present,
+  host           => 'ldap.example.com',
+  port           => '389',
+  encryption     => 'tls',
+  bind_method    => 'search',
+  search_base_dn => 'ou=users,dc=example,dc=com',
+  search_filter  => '(&(objectClass=posixAccount)(uid=%user%))',
+  search_scope   => 'subtree',
+  search_bind_dn => 'cn=proxy,ou=users,dc=example,dc=com',
+  search_passwd  => 'SuperSecret',
+  probe_user     => 'bob',
+  probe_password => 'BobsSecret',
+}
+~~~
+
+Enabling a configuration (`auth.ldap.order.N`) and switching users to `authmethod => ldap` are separate steps; see `p4 help ldap`.
+
 ### `p4_group`
 This custom type manages Perforce groups.
 

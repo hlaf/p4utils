@@ -15,6 +15,12 @@ module P4Utils
     # p4d's wordings for "that is not this user's password" (or no password
     # is set at all). Anything else is NOT a rejection and is re-raised.
     PASSWORD_REJECTED = /Authentication failed|Password invalid|P4PASSWD\) invalid or unset|no password set/i
+    # 'p4 ldap -t' verdicts. A failed bind names the DN the directory
+    # refused ("Authentication as <dn> failed. Reason: ..."); the plain
+    # form carries no DN.
+    LDAP_TEST_PASSED = /Authentication successful/i
+    LDAP_BIND_FAILED = /Authentication as\s+(.+?)\s+failed/i
+    LDAP_AUTH_FAILED = /Authentication (?:for \S+ )?failed/i
 
     # def default_config_file
     #   Puppet.initialize_settings unless Puppet[:confdir]
@@ -267,6 +273,77 @@ module P4Utils
 
     def log_debug(message)
       Puppet.debug(message) if defined?(Puppet)
+    end
+
+    # Names of the server's LDAP configurations ('p4 ldaps').
+    def getLdapNames
+      names = []
+      @p4.run_ldaps.each { |entry|
+        name = entry['name'] || entry['Name']
+        raise "unexpected 'p4 ldaps' output: #{entry.inspect}" if name.nil?
+        names << name
+      }
+      return names
+    end
+
+    # The spec form of LDAP configuration +name+ ('p4 ldap -o'). For an
+    # unknown name the server answers a template, so existence is decided
+    # by getLdapNames, not by this.
+    def getLdap(name)
+      return @p4.run_ldap('-o', name).shift
+    end
+
+    # Save an LDAP spec form ('p4 ldap -i'); the whole form, password
+    # included, goes over the API's input channel.
+    def saveLdap(form)
+      @p4.save_ldap(form)
+    end
+
+    def deleteLdap(name)
+      if getLdapNames.include?(name) then
+        @p4.run_ldap('-d', name)
+      end
+    end
+
+    # Does the directory accept the server's bind for LDAP configuration
+    # +name+?  The server tests the configuration itself ('p4 ldap -t'),
+    # authenticating +probe_user+ with +probe_password+ (answered over the
+    # API's prompt channel); when the configuration's own bind as
+    # +bind_dn+ (the live SearchBindDN) is what the directory refuses, the
+    # stored SearchPasswd is stale and the answer is false. A refusal that
+    # names a different DN is the probe user's own credential failing, not
+    # the server's, and is raised; so is any other failure (no directory,
+    # no such user, ...), so a broken probe can never masquerade as a
+    # verdict. The plain "Authentication failed" without a DN cannot be
+    # told apart and counts as a rejection: re-saving the spec is harmless
+    # and the caller re-probes afterwards. Neither password is ever logged.
+    def ldap_bind_accepted?(name, bind_dn, probe_user, probe_password)
+      @p4.input = probe_password
+      begin
+        result = @p4.run_ldap('-t', probe_user, name)
+        notes = (Array(result) + @p4.warnings).map { |m| m.to_s }
+        if notes.any? { |m| m =~ LDAP_TEST_PASSED } then
+          return true
+        end
+        raise "'p4 ldap -t #{probe_user} #{name}' gave no verdict: #{notes.join(' ')}"
+      rescue P4Exception
+        messages = (@p4.errors + @p4.warnings).join(' ')
+        if ldap_search_bind_rejected?(messages, bind_dn) then
+          log_debug("the directory refused the server's bind for LDAP configuration '#{name}': #{messages}")
+          return false
+        end
+        raise
+      end
+    end
+
+    def ldap_search_bind_rejected?(messages, bind_dn)
+      if messages =~ LDAP_BIND_FAILED then
+        failed_dn = $1
+        return false if bind_dn.nil?
+        return failed_dn.casecmp(bind_dn.to_s) == 0
+      end
+      return true if messages =~ LDAP_AUTH_FAILED
+      return false
     end
 
     def removeUser(userid, cleanProtections = true, cleanGroups = true)

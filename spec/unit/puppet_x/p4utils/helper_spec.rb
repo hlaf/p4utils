@@ -53,6 +53,35 @@ class FakeP4
     @script.fetch(:login_output, ['TICKET0123456789ABCDEF'])
   end
 
+  # 'p4 ldaps' lists {name, host, port, type, status} per configuration.
+  def run_ldaps(*args)
+    @calls << [:run_ldaps] + args
+    @script.fetch(:ldaps, [])
+  end
+
+  # 'p4 ldap -o <name>' answers the stored form (a template for an unknown
+  # name); '-d' deletes; '-t <user> <name>' is the server-side test, which
+  # consumes the password from #input and answers with a verdict.
+  def run_ldap(*args)
+    @calls << [:run_ldap] + args
+    case args.first
+    when '-o'
+      form = @script.fetch(:ldap_forms, {})[args[1]]
+      [form ? form.dup : { 'Name' => args[1], 'Port' => '389', 'Encryption' => 'none', 'BindMethod' => 'simple' }]
+    when '-d'
+      []
+    when '-t'
+      @calls << [:prompt_answered, @input]
+      fail_with(@script[:ldap_test_error]) if @script[:ldap_test_error]
+      @script.fetch(:ldap_test_output, ['Authentication successful.'])
+    end
+  end
+
+  def save_ldap(form)
+    @calls << [:save_ldap, form]
+    ["LDAP configuration #{form['Name']} saved."]
+  end
+
   private
 
   def fail_with(message, sink = @errors)
@@ -190,6 +219,127 @@ describe P4Utils::Helper do
       it 're-raises and does not try to disconnect an unconnected probe' do
         expect { probe! }.to raise_error(P4Exception, /Connect to server failed/)
         expect(probe.calls).to eq([[:connect]])
+      end
+    end
+  end
+
+  describe 'LDAP configurations' do
+    let(:bind_dn) { 'cn=proxy,ou=users,dc=example,dc=com' }
+    let(:stored) do
+      { 'Name' => 'corp', 'Host' => 'ldap.example.com', 'Port' => '389', 'Encryption' => 'tls',
+        'BindMethod' => 'search', 'SearchBindDN' => bind_dn, 'SearchPasswd' => '******',
+        'GroupSearchScope' => 'subtree' }
+    end
+    let(:script) { { :ldaps => [{ 'name' => 'corp', 'host' => 'ldap.example.com', 'port' => '389', 'type' => 'tls', 'status' => 'active' }], :ldap_forms => { 'corp' => stored } } }
+    let(:session) { FakeP4.new(script.merge(:user => 'p4admin')) }
+    let(:helper) { helper_with(session) }
+
+    describe '#getLdapNames' do
+      it 'lists the configured names' do
+        expect(helper.getLdapNames).to eq(['corp'])
+      end
+
+      it 'fails loudly on a listing it does not understand rather than reporting nothing' do
+        session = FakeP4.new(:ldaps => [{ 'host' => 'x' }])
+        expect { helper_with(session).getLdapNames }.to raise_error(RuntimeError, /unexpected 'p4 ldaps' output/)
+      end
+    end
+
+    describe '#getLdap' do
+      it 'fetches the stored form' do
+        expect(helper.getLdap('corp')).to eq(stored)
+        expect(session.calls).to eq([[:run_ldap, '-o', 'corp']])
+      end
+    end
+
+    describe '#saveLdap' do
+      it 'hands the whole form, password included, to the API input channel (never a command line)' do
+        form = stored.merge('SearchPasswd' => 'new-s3cret')
+        helper.saveLdap(form)
+        expect(session.calls).to eq([[:save_ldap, form]])
+        expect(session.calls.flatten.select { |c| c.is_a?(String) }).not_to include('new-s3cret')
+      end
+    end
+
+    describe '#deleteLdap' do
+      it 'deletes a configured name' do
+        helper.deleteLdap('corp')
+        expect(session.calls.last).to eq([:run_ldap, '-d', 'corp'])
+      end
+
+      it 'is a no-op for an unknown name' do
+        helper.deleteLdap('nope')
+        expect(session.calls).to eq([[:run_ldaps]])
+      end
+    end
+
+    describe '#ldap_bind_accepted?' do
+      def probe!
+        helper.ldap_bind_accepted?('corp', bind_dn, 'bob', 'bobs-pw')
+      end
+
+      context 'when the server authenticates the probe user' do
+        it 'is true' do
+          expect(probe!).to be true
+        end
+
+        it 'runs the server-side test as the probe user, answering its password prompt over the input channel' do
+          probe!
+          expect(session.calls).to eq([[:run_ldap, '-t', 'bob', 'corp'], [:prompt_answered, 'bobs-pw']])
+          expect(session.calls.first).not_to include('bobs-pw')
+        end
+      end
+
+      context 'when the directory refuses the configuration\'s own bind (stale SearchPasswd)' do
+        let(:script) { super().merge(:ldap_test_error => "Authentication as #{bind_dn} failed. Reason: Invalid credentials") }
+
+        it 'is false' do
+          expect(probe!).to be false
+        end
+
+        it 'matches the bind DN case-insensitively (directories do)' do
+          expect(helper.ldap_bind_accepted?('corp', bind_dn.upcase, 'bob', 'bobs-pw')).to be false
+        end
+      end
+
+      context 'when the directory refuses the probe user instead' do
+        let(:script) { super().merge(:ldap_test_error => 'Authentication as uid=bob,ou=users,dc=example,dc=com failed. Reason: Invalid credentials') }
+
+        it 're-raises: that is not the server\'s credential' do
+          expect { probe! }.to raise_error(P4Exception, /uid=bob/)
+        end
+      end
+
+      context 'when the server reports a plain failure without naming a DN' do
+        let(:script) { super().merge(:ldap_test_error => 'Authentication for bob failed against configuration corp.') }
+
+        it 'counts it as a rejection (the caller re-saves and re-probes)' do
+          expect(probe!).to be false
+        end
+      end
+
+      context 'when no bind DN is live' do
+        let(:script) { super().merge(:ldap_test_error => "Authentication as #{bind_dn} failed. Reason: Invalid credentials") }
+
+        it 'cannot attribute a named failure to the server and re-raises' do
+          expect { helper.ldap_bind_accepted?('corp', nil, 'bob', 'bobs-pw') }.to raise_error(P4Exception)
+        end
+      end
+
+      context 'when the failure is not an authentication verdict' do
+        let(:script) { super().merge(:ldap_test_error => 'Failed to initialize LDAP connection to: ldap.example.com:389') }
+
+        it 're-raises instead of guessing' do
+          expect { probe! }.to raise_error(P4Exception, /initialize LDAP connection/)
+        end
+      end
+
+      context 'when the server answers without a verdict' do
+        let(:script) { super().merge(:ldap_test_output => []) }
+
+        it 'fails rather than reading silence as success' do
+          expect { probe! }.to raise_error(RuntimeError, /gave no verdict/)
+        end
       end
     end
   end
