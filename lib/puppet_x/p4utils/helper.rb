@@ -12,6 +12,9 @@ module P4Utils
     P_TYPES = ['user','group']
     U_TYPES = ['service','operator','standard']
     U_AUTH  = ['perforce','ldap']
+    # p4d's wordings for "that is not this user's password" (or no password
+    # is set at all). Anything else is NOT a rejection and is re-raised.
+    PASSWORD_REJECTED = /Authentication failed|Password invalid|P4PASSWD\) invalid or unset|no password set/i
 
     # def default_config_file
     #   Puppet.initialize_settings unless Puppet[:confdir]
@@ -205,8 +208,65 @@ module P4Utils
       end
     end
 
-    def setPassword(userid, password)
-      @p4.run_passwd('-P', password, userid)
+    # Set another user's password through the superuser session, answering
+    # the two "Enter new password" / "Re-enter new password" prompts of an
+    # interactive 'p4 passwd <user>' over the API's input channel. The
+    # argument form ('passwd -P') is deliberately not used: p4d rejects it
+    # as "not permitted at this server security level" on some servers, and
+    # it would carry the password on the command line.
+    def set_password(userid, password)
+      if userid == @p4.user then
+        raise "set_password cannot change the password of the session user '#{userid}' itself (p4d prompts for the old password first)"
+      end
+      @p4.input = [password, password]
+      @p4.run('passwd', userid)
+    end
+
+    # Does the server accept +password+ for +userid+?  Probed as +userid+ on
+    # a connection of its own (same P4PORT via P4CONFIG), so the superuser
+    # session is untouched; 'login -p' only displays a ticket and stores
+    # nothing, and the probe's P4TICKETS is an empty scratch file besides.
+    # The password travels over the API's prompt channel and neither it nor
+    # the displayed ticket is ever logged. A password rejection answers
+    # false; any other failure (connection, protections, ...) is raised so a
+    # broken probe can never masquerade as a verdict.
+    def password_accepted?(userid, password)
+      require 'tempfile'
+      tickets = Tempfile.new('p4_user_probe')
+      tickets.close
+      probe = P4.new
+      probe.user = userid
+      probe.password = password
+      probe.ticket_file = tickets.path
+      probe.prog = 'puppet-p4_user'
+      begin
+        probe.connect
+        probe.run_trust('-y') if probe.port.start_with?('ssl:')
+        result = probe.run_login('-p')
+        # A user with no password at all "logs in" without one: that is not
+        # the declared password being accepted.
+        notes = (Array(result) + probe.warnings).map { |m| m.to_s }
+        if notes.any? { |m| m =~ PASSWORD_REJECTED } then
+          log_debug("p4d reports no password set for user '#{userid}'")
+          return false
+        end
+        return true
+      rescue P4Exception
+        # At the default exception level a warning raises too, so read both.
+        messages = (probe.errors + probe.warnings).join(' ')
+        if messages =~ PASSWORD_REJECTED then
+          log_debug("p4d rejected the declared password for user '#{userid}': #{messages}")
+          return false
+        end
+        raise
+      ensure
+        probe.disconnect if probe.connected?
+        tickets.unlink
+      end
+    end
+
+    def log_debug(message)
+      Puppet.debug(message) if defined?(Puppet)
     end
 
     def removeUser(userid, cleanProtections = true, cleanGroups = true)
