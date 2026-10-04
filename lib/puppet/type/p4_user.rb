@@ -69,15 +69,18 @@ Puppet::Type.newtype(:p4_user) do
     desc "The user's email address"
   end
 
+  # Neither 'type' nor 'authmethod' has a default: an undeclared field is
+  # left exactly as the server has it (on create, p4d applies its own
+  # defaults -- 'standard', and the auth.default.method configurable). A
+  # Puppet-side default would stand in for a value the server already knows
+  # and, written back on the next unrelated change, silently overwrite it.
   newproperty(:type) do
     desc "The Perforce user type. This cannot be changed once set."
-    defaultto :standard
     newvalues(:standard, :service, :operator)
   end
 
   newproperty(:authmethod) do
     desc "The authetication method (perforce or ldap) for the user"
-    defaultto :perforce
     newvalues(:perforce, :ldap)
   end
 

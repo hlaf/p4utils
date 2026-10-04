@@ -6,6 +6,21 @@ describe Puppet::Type.type(:p4_user) do
     described_class.new({ :name => 'bob', :fullname => 'Bob', :email => 'bob@example.com' }.merge(params))
   end
 
+  describe 'type and authmethod' do
+    it 'have no default, so an undeclared field is left as the server has it' do
+      resource = user
+      expect(resource[:type]).to be_nil
+      expect(resource[:authmethod]).to be_nil
+      expect(resource.properties.map { |p| p.name }).not_to include(:type, :authmethod)
+    end
+
+    it 'take only the values p4d accepts' do
+      expect(user(:type => 'operator', :authmethod => 'ldap')[:authmethod]).to eq(:ldap)
+      expect { user(:type => 'admin') }.to raise_error(Puppet::Error, /Invalid value/)
+      expect { user(:authmethod => 'kerberos') }.to raise_error(Puppet::Error, /Invalid value/)
+    end
+  end
+
   describe 'password' do
     it 'is a parameter, never a property (keeps the plaintext out of events and reports)' do
       expect(described_class.validparameter?(:password)).to be true

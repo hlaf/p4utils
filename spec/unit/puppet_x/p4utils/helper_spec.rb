@@ -82,6 +82,28 @@ class FakeP4
     ["LDAP configuration #{form['Name']} saved."]
   end
 
+  # 'p4 users -a' lists every user; what each entry carries is up to the
+  # script (some servers omit Type and AuthMethod from the listing).
+  def run_users(*args)
+    @calls << [:run_users] + args
+    @script.fetch(:users, []).map { |u| u.dup }
+  end
+
+  # 'p4 user -o <name>' answers the stored form, or a template for a name
+  # the server does not know.
+  def run_user(*args)
+    @calls << [:run_user] + args
+    form = @script.fetch(:user_forms, {})[args[1]]
+    form ||= { 'User' => args[1], 'Email' => "#{args[1]}@example.com", 'FullName' => args[1],
+               'Update' => '2026/01/01 00:00:00', 'Access' => '2026/01/01 00:00:00' }
+    [form.dup]
+  end
+
+  def save_user(form, *flags)
+    @calls << [:save_user, form] + flags
+    ["User #{form['User']} saved."]
+  end
+
   private
 
   def fail_with(message, sink = @errors)
@@ -219,6 +241,95 @@ describe P4Utils::Helper do
       it 're-raises and does not try to disconnect an unconnected probe' do
         expect { probe! }.to raise_error(P4Exception, /Connect to server failed/)
         expect(probe.calls).to eq([[:connect]])
+      end
+    end
+  end
+
+  describe 'user forms' do
+    # A listing that carries only what every server version lists.
+    let(:listing) do
+      [{ 'User' => 'bob', 'Email' => 'bob@example.com', 'FullName' => 'Bob', 'Update' => '1', 'Access' => '2' },
+       { 'User' => 'ci', 'Email' => 'ci@example.com', 'FullName' => 'CI', 'Update' => '1', 'Access' => '2' }]
+    end
+    let(:bob_form) do
+      { 'User' => 'bob', 'Email' => 'bob@example.com', 'FullName' => 'Bob', 'Type' => 'standard',
+        'AuthMethod' => 'perforce', 'Reviews' => ['//depot/...'], 'Update' => '1', 'Access' => '2' }
+    end
+    let(:ci_form) do
+      { 'User' => 'ci', 'Email' => 'ci@example.com', 'FullName' => 'CI', 'Type' => 'standard',
+        'AuthMethod' => 'ldap', 'Update' => '1', 'Access' => '2' }
+    end
+    let(:script) { { :users => listing, :user_forms => { 'bob' => bob_form, 'ci' => ci_form } } }
+    let(:session) { FakeP4.new(script.merge(:user => 'p4admin')) }
+    let(:helper) { helper_with(session) }
+
+    describe '#getUsers' do
+      it 'reads Type and AuthMethod from each user form when the listing lacks them, never from a server default' do
+        users = helper.getUsers
+        expect(users.map { |u| [u['User'], u['Type'], u['AuthMethod']] }).to eq([['bob', 'standard', 'perforce'], ['ci', 'standard', 'ldap']])
+        expect(session.calls.map { |c| c.first }).not_to include(:run)   # no 'configure show'
+        expect(session.calls).to include([:run_user, '-o', 'ci'])
+      end
+
+      it 'leaves a listing that already carries them alone' do
+        session = FakeP4.new(:users => [{ 'User' => 'ci', 'Type' => 'standard', 'AuthMethod' => 'ldap' }])
+        users = helper_with(session).getUsers
+        expect(users).to eq([{ 'User' => 'ci', 'Type' => 'standard', 'AuthMethod' => 'ldap' }])
+        expect(session.calls).to eq([[:run_users, '-a']])
+      end
+
+      it 'strips the server-maintained timestamps' do
+        expect(helper.getUsers.first.keys).not_to include('Update', 'Access')
+      end
+    end
+
+    describe '#getUser' do
+      it 'answers the full stored form of a listed user' do
+        expect(helper.getUser('bob')['Reviews']).to eq(['//depot/...'])
+      end
+
+      it 'is nil for a user the server does not list (whose -o would be a template)' do
+        expect(helper.getUser('nobody')).to be_nil
+        expect(session.calls.map { |c| c.first }).not_to include(:run_user)
+      end
+    end
+
+    describe '#saveUser' do
+      def saved
+        session.calls.find { |c| c.first == :save_user }
+      end
+
+      it 'overlays only the given fields on the stored form, keeping everything else as the server has it' do
+        helper.saveUser('ci', { 'FullName' => 'Jenkins CI', 'Email' => 'ci@example.com' })
+        expect(saved).to eq([:save_user, { 'User' => 'ci', 'Email' => 'ci@example.com', 'FullName' => 'Jenkins CI',
+                                           'Type' => 'standard', 'AuthMethod' => 'ldap' }, '-f'])
+      end
+
+      it 'keeps fields the type does not model' do
+        helper.saveUser('bob', { 'FullName' => 'Robert' })
+        expect(saved[1]['Reviews']).to eq(['//depot/...'])
+      end
+
+      it 'does not save when nothing differs' do
+        helper.saveUser('ci', { 'FullName' => 'CI', 'Type' => :standard, 'AuthMethod' => 'ldap' })
+        expect(saved).to be_nil
+      end
+
+      it 'creates an unlisted user from the server template, even when the given fields match it' do
+        helper.saveUser('new', { 'FullName' => 'new', 'Email' => 'new@example.com' })
+        expect(saved[1]['User']).to eq('new')
+        expect(saved[1].keys).not_to include('Update', 'Access')
+      end
+
+      it 'writes symbols as the strings the form takes' do
+        helper.saveUser('bob', { 'Type' => :standard, 'AuthMethod' => :ldap })
+        expect(saved[1]['AuthMethod']).to eq('ldap')
+      end
+
+      it 'refuses a type or auth method the server would not take' do
+        expect { helper.saveUser('bob', { 'Type' => 'admin' }) }.to raise_error(RuntimeError, /invalid type/)
+        expect { helper.saveUser('bob', { 'AuthMethod' => 'kerberos' }) }.to raise_error(RuntimeError, /invalid auth/)
+        expect(saved).to be_nil
       end
     end
   end

@@ -64,21 +64,32 @@ describe Puppet::Type.type(:p4_user).provider(:p4ruby) do
     end
   end
 
+  describe '.instances' do
+    it 'maps every listed user onto the managed properties' do
+      helper.expects(:getUsers).returns([{ 'User' => 'ci', 'FullName' => 'CI', 'Email' => 'ci@example.com',
+                                           'Type' => 'standard', 'AuthMethod' => 'ldap' }])
+      instances = described_class.instances
+      expect(instances.map { |i| i.name }).to eq(['ci'])
+      expect(instances.first.authmethod).to eq('ldap')
+      expect(instances.first.type).to eq('standard')
+    end
+  end
+
   describe '#create' do
     let(:provider) { described_class.new }
 
     context 'with a password declared' do
       let(:params) { base_params.merge(:password => 's3cret') }
 
-      it 'saves the user form, then enforces the password (ensure sync skips the other properties)' do
-        helper.expects(:addUser).with('bob', 'Bob', 'bob@example.com', :standard, :perforce)
+      it 'saves the declared fields, then enforces the password (ensure sync skips the other properties)' do
+        helper.expects(:saveUser).with('bob', { 'FullName' => 'Bob', 'Email' => 'bob@example.com' })
         helper.expects(:set_password).with('bob', 's3cret')
         helper.expects(:password_accepted?).with('bob', 's3cret').returns(true)
         provider.create
       end
 
       it 'fails when the password still does not take after creation' do
-        helper.stubs(:addUser)
+        helper.stubs(:saveUser)
         helper.expects(:set_password).with('bob', 's3cret')
         helper.expects(:password_accepted?).returns(false)
         expect { provider.create }.to raise_error(Puppet::Error, /still rejects/)
@@ -87,9 +98,19 @@ describe Puppet::Type.type(:p4_user).provider(:p4ruby) do
 
     context 'without a password' do
       it 'does not touch the password' do
-        helper.expects(:addUser).with('bob', 'Bob', 'bob@example.com', :standard, :perforce)
+        helper.expects(:saveUser).with('bob', { 'FullName' => 'Bob', 'Email' => 'bob@example.com' })
         helper.expects(:set_password).never
         helper.expects(:password_accepted?).never
+        provider.create
+      end
+    end
+
+    context 'with type and authmethod declared' do
+      let(:params) { base_params.merge(:type => 'operator', :authmethod => 'ldap') }
+
+      it 'passes them along as the strings the form takes' do
+        helper.expects(:saveUser).with('bob', { 'FullName' => 'Bob', 'Email' => 'bob@example.com',
+                                                'Type' => 'operator', 'AuthMethod' => 'ldap' })
         provider.create
       end
     end
@@ -101,8 +122,16 @@ describe Puppet::Type.type(:p4_user).provider(:p4ruby) do
     it 'no longer re-sets the password as a side effect of an unrelated change' do
       helper.expects(:set_password).never
       helper.expects(:password_accepted?).never
-      helper.expects(:addUser).with('bob', 'Bob', 'bob@example.com', :standard, :perforce)
+      helper.expects(:saveUser).with('bob', { 'FullName' => 'Bob', 'Email' => 'bob@example.com' })
       provider.email = 'bob@example.com'
+      provider.flush
+    end
+
+    it 'sends only the declared fields: an undeclared authmethod is not guessed from the live value' do
+      provider = described_class.new(current.merge(:authmethod => :ldap))
+      resource.provider = provider
+      helper.expects(:saveUser).with { |_, fields| !fields.has_key?('AuthMethod') && !fields.has_key?('Type') }
+      provider.fullname = 'Bob'
       provider.flush
     end
 

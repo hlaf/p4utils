@@ -118,7 +118,7 @@ p4utils::config { $p4config:
 ~~~
 
 ### `p4_user`
-This custom type manages Perforce user accounts.
+This custom type manages Perforce user accounts. Only the attributes you declare are managed: on every save the provider reads the user's form back from the server and overlays just the declared fields, so an undeclared `type` or `authmethod` -- and anything the type does not model, such as `Reviews` or `JobView` -- keeps its live value. Nothing is guessed from a server default (`auth.default.method` says what a *new* user would get, not what an existing one has).
 
 #### Attributes
 * `ensure` -- must be one of `present` or `absent`. Defaults to `present`.
@@ -127,8 +127,8 @@ This custom type manages Perforce user accounts.
 * `email` -- the email of the user. This is a required field if the user is going to be created.
 * `password` -- the user's password. When given it is **enforced**: on every run the provider checks that the server still accepts it for the user (a display-only `p4 login -p` probe, run as the user on a connection of its own) and, if it does not -- wrong password or no password set -- re-sets it through the superuser session with an interactive `p4 passwd <user>` (the `-P` argument form is not used; p4d rejects it at some security levels, and it would expose the password on the command line). The password is a *parameter*, so it never appears as a desired value in events, reports or `--noop` diffs; it only ever travels over the Perforce API's prompt channel. Cannot be combined with `authmethod => ldap`.
 * `password_state` -- **derived, do not set**. Present (desired `accepted`) exactly when `password` is given; its current value is `accepted` or `rejected`, so a `password_state changed 'rejected' to 'accepted'` event is the provider re-setting the password. Users managed without a `password` are never probed.
-* `type` -- must be one of `standard`, `operator` or `service`.
-* `authmethod` -- must be one of `perforce` or `ldap`. Defaults to `perforce`.
+* `type` -- must be one of `standard`, `operator` or `service`. No default: left as the server has it when undeclared (p4d creates a new user as `standard`).
+* `authmethod` -- must be one of `perforce` or `ldap`. No default: left as the server has it when undeclared (p4d creates a new user with its `auth.default.method`).
 * `p4config` -- used to specify the location of the config file. If not specified, the type will default to `$PUPPET_CONFIG_DIR/p4config.txt`.
 
 #### Example Usage

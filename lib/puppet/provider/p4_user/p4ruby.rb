@@ -35,23 +35,24 @@ Puppet::Type.type(:p4_user).provide(:p4ruby) do
     end
   end
 
+  # The user form fields the resource manages, keyed by property. A method
+  # rather than a constant: a constant assigned inside this block lands on
+  # Object, shared with every other provider that names one the same way.
+  def self.fields
+    @fields ||= {
+      :fullname   => 'FullName',
+      :email      => 'Email',
+      :type       => 'Type',
+      :authmethod => 'AuthMethod',
+    }
+  end
+
   def create
     Puppet.debug("creating new p4_user resource")
     self.fail "email is a required attribute" unless resource[:email]
     self.fail "fullname is a required attribute" unless resource[:fullname]
     helper = P4Utils::Helper.new(resource[:p4config])
-    userid = resource[:name]
-    fullname = resource[:fullname]
-    email = resource[:email]
-    type = 'standard'
-    authmethod = 'perforce'
-    if(resource[:type]) then
-      type = resource[:type]
-    end
-    if(resource[:authmethod]) then
-      authmethod = resource[:authmethod]
-    end
-    helper.addUser(userid, fullname, email, type, authmethod)
+    save_form(helper)
     # Syncing 'ensure' short-circuits the other properties for this run, so
     # the password has to be set here rather than left to password_state=.
     if(resource[:password]) then
@@ -119,30 +120,26 @@ Puppet::Type.type(:p4_user).provide(:p4ruby) do
 
   def flush
     if(@property_flush.length > 0) then
-      helper = P4Utils::Helper.new(resource[:p4config])
-      userid = resource[:name]
-      fullname = @property_hash[:fullname]
-      email = @property_hash[:email]
-      type = @property_hash[:type]
-      authmethod = @property_hash[:authmethod]
-      if(resource[:fullname]) then
-        fullname = resource[:fullname]
-      end
-      if(resource[:email]) then
-        email = resource[:email]
-      end
-      if(resource[:type]) then
-        type = resource[:type]
-      end
-      if(resource[:authmethod]) then
-        authmethod = resource[:authmethod]
-      end
-      helper.addUser(userid, fullname, email, type, authmethod)
+      save_form(P4Utils::Helper.new(resource[:p4config]))
     end
     @property_hash = resource.to_hash
   end
 
   private
+
+  # Write the declared fields -- only those -- onto the user's form. The
+  # helper overlays them on the form the server holds, so an undeclared
+  # field (and anything the type does not model, such as Reviews) keeps
+  # its live value instead of being replaced by a guess.
+  def save_form(helper)
+    fields = {}
+    self.class.fields.each do |attr, field|
+      value = resource[attr]
+      fields[field] = value.to_s unless value.nil?
+    end
+    helper.saveUser(resource[:name], fields)
+    @property_flush = {}
+  end
 
   # Set the declared password through the superuser session, then prove it
   # took by probing again: a silent no-op here would report 'changed' while

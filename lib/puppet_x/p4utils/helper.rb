@@ -187,31 +187,63 @@ module P4Utils
       @p4.save_triggers(form)
     end
 
+    # Every user, as 'p4 users -a' lists them. Some servers leave Type and
+    # AuthMethod out of that listing; they are then read from the user's own
+    # form, which always carries them -- never guessed from a server default
+    # such as auth.default.method, which says what a NEW user would get, not
+    # what this one has.
     def getUsers
       users = @p4.run_users('-a')
       users.each { |u|
         u.delete("Update")
         u.delete("Access")
-        if !u['AuthMethod'] then
-          u['AuthMethod'] = getSettingValue('auth.default.method')
+        if !u['Type'] || !u['AuthMethod'] then
+          form = userForm(u['User'])
+          u['Type'] = form['Type'] if !u['Type']
+          u['AuthMethod'] = form['AuthMethod'] if !u['AuthMethod']
         end
       }
       return users
     end
 
+    # The full spec form of an existing user ('p4 user -o'); nil for a
+    # user the server does not list (its '-o' would answer a template).
     def getUser(userid)
-      users = getUsers
-      return users.find {|u| u["User"] == userid }
+      return nil unless userExists?(userid)
+      return userForm(userid)
     end
 
-    def addUser(userid, fullName, email, type = 'standard', auth = getSettingValue('auth.default.method'))
-      raise "invalid type" if not U_TYPES.include?("#{type}")
-      raise "invalid auth" if not U_AUTH.include?("#{auth}")
-      nu = { 'User' => userid, 'FullName' => fullName, 'Email' => email, 'Type' => type, 'AuthMethod' => auth}
-      ou = getUser(userid)
-      if (!ou) || (ou != nu) then
-        @p4.save_user(Hash[ nu.map { |k, v| [k.to_s, v.to_s] } ], '-f')
+    # Write +fields+ (form keys: 'FullName', 'Email', 'Type', 'AuthMethod')
+    # onto +userid+'s form, creating the user when needed. The live form is
+    # fetched first and only the given fields are overlaid, so whatever
+    # else the form holds (Reviews, JobView, an AuthMethod the caller does
+    # not set) is written back unchanged. Saved only when something differs.
+    def saveUser(userid, fields)
+      if fields.has_key?('Type') then
+        raise "invalid type" if not U_TYPES.include?("#{fields['Type']}")
       end
+      if fields.has_key?('AuthMethod') then
+        raise "invalid auth" if not U_AUTH.include?("#{fields['AuthMethod']}")
+      end
+      exists = userExists?(userid)
+      form = userForm(userid)
+      before = form.dup
+      form['User'] = userid
+      fields.each { |k, v| form[k.to_s] = v.to_s unless v.nil? }
+      if !exists || form != before then
+        @p4.save_user(form, '-f')
+      end
+    end
+
+    def userExists?(userid)
+      @p4.run_users('-a').any? { |u| u['User'] == userid }
+    end
+
+    def userForm(userid)
+      form = @p4.run_user('-o', userid).shift
+      form.delete("Update")
+      form.delete("Access")
+      return form
     end
 
     # Set another user's password through the superuser session, answering
