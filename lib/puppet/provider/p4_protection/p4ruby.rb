@@ -10,12 +10,14 @@ Puppet::Type.type(:p4_protection).provide(:p4ruby) do
   def self.instances
     protections = Array.new
     data = P4Utils::Helper.new.getProtections
+    total = data.length
     data.each_with_index do |e,i|
       line = "#{e['mode']} #{e['type']} #{e['name']} #{e['host']} #{e['path']}"
       protections << new(
         :ensure   => :present,
         :name     => line,
-        :position => i
+        :position => i,
+        :count    => total
       )
     end
     return protections
@@ -54,6 +56,14 @@ Puppet::Type.type(:p4_protection).provide(:p4ruby) do
 
   def position
     @property_hash[:position]
+  end
+
+  # Total number of rows in the live protections table, captured by
+  # self.instances at prefetch. The type's position insync? needs it to decide
+  # whether a '-1' (append-at-end) entry is already the last row. Not a
+  # property -- carried in the hash self.instances builds.
+  def protection_count
+    @property_hash[:count]
   end
 
   def position=(value)
