@@ -17,6 +17,16 @@ Puppet::Type.newtype(:p4_trigger) do
 
   ensurable
 
+  # Remembered from whichever resource declares it, so self.instances can
+  # connect when it is reached outside a prefetch. The purge path gets there
+  # through Resources#generate, which runs while the transaction graph is being
+  # built -- before any provider prefetch, and regardless of how the resources
+  # are ordered against each other. A parameter's validate runs earlier still,
+  # when the catalog is turned into resources, so this is set in time.
+  class << self
+    attr_accessor :p4config_hint
+  end
+
   newparam(:name, :namevar => true) do
    desc "Trigger name - must be unique"
    newvalues(/\w*/)
@@ -28,6 +38,7 @@ Puppet::Type.newtype(:p4_trigger) do
     # validate the p4config parameter, if passed to the resource
     validate do |value|
       configfile = value
+      Puppet::Type.type(:p4_trigger).p4config_hint = value
     end
     # if no parameter passed, check for the default configfile
     if !configfile then
