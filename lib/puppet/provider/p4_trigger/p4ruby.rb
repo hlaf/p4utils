@@ -8,6 +8,19 @@ Puppet::Type.type(:p4_trigger).provide(:p4ruby) do
   end
 
   def self.instances
+    # Helper.new with no argument trusts an ambient P4CONFIG, which prefetch
+    # sets from a declared resource's p4config. Purge reaches instances through
+    # Resources#generate instead, where no prefetch is guaranteed to have run,
+    # so connecting blind here would talk to the wrong server -- or nowhere --
+    # and report an empty table, which a purge reads as "everything is an
+    # orphan". Fail loudly instead.
+    if ENV['P4CONFIG'].nil? || ENV['P4CONFIG'].to_s.empty?
+      raise Puppet::Error,
+            'p4_trigger: cannot enumerate triggers because P4CONFIG is unset. ' \
+            'Order every p4_trigger resource before any purge of this type so ' \
+            'the connection settings are resolved first.'
+    end
+
     triggers = Array.new
     data = P4Utils::Helper.new.getTriggers
     data.each do |d|
